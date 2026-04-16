@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Listing Video Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+
+    .step-dot {
+      width: 2rem; height: 2rem;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 700;
+      transition: all 0.3s ease;
+    }
+    .step-dot.pending  { background: #e5e7eb; color: #9ca3af; }
+    .step-dot.active   { background: #3b82f6; color: white; box-shadow: 0 0 0 4px #bfdbfe; }
+    .step-dot.done     { background: #10b981; color: white; }
+    .step-dot.error    { background: #ef4444; color: white; }
+
+    .step-line { flex: 1; height: 2px; transition: background 0.3s ease; }
+    .step-line.done { background: #10b981; }
+    .step-line.pending { background: #e5e7eb; }
+
+    .spinner {
+      width: 1rem; height: 1rem;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .pulse-bar {
+      height: 4px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+      background-size: 200% 100%;
+      animation: pulse-bg 1.5s linear infinite;
+      border-radius: 2px;
+    }
+    @keyframes pulse-bg {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 200% 50%; }
+    }
+
+    textarea { resize: vertical; }
+
+    .glass {
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body class="text-gray-100 py-8 px-4">
+
+  <div class="max-w-3xl mx-auto">
+
+    <!-- Header -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center gap-2 bg-blue-500/20 text-blue-300 px-4 py-1 rounded-full text-sm mb-4">
+        <span class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+        Powered by Kling 2.6 · ElevenLabs · Claude
+      </div>
+      <h1 class="text-4xl font-bold text-white mb-2">Listing Video Generator</h1>
+      <p class="text-gray-400 text-lg">Paste a property URL — get a cinematic marketing video in minutes.</p>
+    </div>
+
+    <!-- Input card -->
+    <div class="bg-white/10 border border-white/20 rounded-2xl p-6 mb-6 shadow-2xl">
+      <div class="flex gap-3 mb-4">
+        <input
+          id="urlInput"
+          type="url"
+          placeholder="https://www.findmexicohouses.com/listing/…"
+          class="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        />
+        <select
+          id="langSelect"
+          class="bg-white/10 border border-white/20 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        >
+          <option value="en">🇺🇸 EN</option>
+          <option value="es">🇲🇽 ES</option>
+        </select>
+      </div>
+      <button
+        id="generateBtn"
+        onclick="startGeneration()"
+        class="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 transition text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 text-sm"
+      >
+        Generate Video
+      </button>
+    </div>
+
+    <!-- Settings panel (collapsible) -->
+    <details class="bg-white/10 border border-white/20 rounded-2xl mb-6 shadow-lg overflow-hidden">
+      <summary class="px-6 py-4 cursor-pointer text-gray-300 hover:text-white text-sm font-medium flex items-center gap-2 select-none">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        Settings
+      </summary>
+      <div class="px-6 pb-6 grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <label class="block text-gray-400 mb-1">Agent / Branding name</label>
+          <input id="agentName" type="text" value="Ronival Real Estate"
+            class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Video format</label>
+          <select id="aspectRatio" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="16:9">16:9 — YouTube / Web</option>
+            <option value="9:16">9:16 — Reels / TikTok</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Video model</label>
+          <select id="videoModel" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="kling-2.6-image-to-video">Kling 2.6 (recommended)</option>
+            <option value="kling-2.1-image-to-video">Kling 2.1</option>
+            <option value="veo-3.1-fast">Veo 3.1 Fast</option>
+            <option value="seedance-2.0">Seedance 2.0</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">ElevenLabs voice</label>
+          <select id="voiceSelect" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="Rachel">Rachel (warm, female)</option>
+            <option value="Antoni">Antoni (smooth, male)</option>
+            <option value="Bella">Bella (soft, female)</option>
+            <option value="Josh">Josh (deep, male)</option>
+            <option value="Elli">Elli (youthful, female)</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <!-- Progress section -->
+    <div id="progressSection" class="hidden bg-white/10 border border-white/20 rounded-2xl p-6 mb-6 shadow-2xl">
+      <h2 class="text-white font-semibold mb-5">Progress</h2>
+
+      <!-- Step indicators -->
+      <div class="flex items-center mb-6" id="stepsRow">
+        <!-- Steps injected by JS -->
+      </div>
+
+      <!-- Progress bar -->
+      <div class="bg-white/10 rounded-full h-2 mb-3 overflow-hidden">
+        <div id="progressBar" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width:0%"></div>
+      </div>
+      <p id="progressMsg" class="text-gray-400 text-sm text-center"></p>
+    </div>
+
+    <!-- Script editor -->
+    <div id="scriptSection" class="hidden bg-white/10 border border-white/20 rounded-2xl p-6 mb-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white font-semibold">Voiceover Script</h2>
+        <span class="text-xs text-gray-400 bg-white/10 px-2 py-1 rounded">Edit before continuing</span>
+      </div>
+      <textarea
+        id="scriptEditor"
+        rows="10"
+        class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm leading-relaxed"
+      ></textarea>
+      <div class="flex gap-3 mt-4">
+        <button
+          onclick="regenerateScript()"
+          class="flex-1 border border-white/20 hover:bg-white/10 transition text-gray-300 font-medium py-2 px-4 rounded-xl text-sm"
+        >
+          Regenerate
+        </button>
+        <button
+          onclick="continueWithScript()"
+          class="flex-1 bg-blue-600 hover:bg-blue-500 active:scale-95 transition text-white font-semibold py-2 px-4 rounded-xl text-sm flex items-center justify-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Generate Video
+        </button>
+      </div>
+    </div>
+
+    <!-- Result section -->
+    <div id="resultSection" class="hidden bg-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+      <div class="flex items-center gap-2 text-green-400 font-semibold mb-4">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+        Video Ready!
+      </div>
+      <video id="videoPlayer" controls class="w-full rounded-xl mb-4 bg-black" style="aspect-ratio:16/9"></video>
+      <a id="downloadBtn" href="#"
+        class="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 active:scale-95 transition text-white font-semibold py-3 px-6 rounded-xl text-sm"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        Download MP4
+      </a>
+    </div>
+
+    <!-- Error banner -->
+    <div id="errorBanner" class="hidden bg-red-500/20 border border-red-500/40 rounded-2xl p-5 mb-6">
+      <div class="flex items-start gap-3">
+        <svg class="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div>
+          <p class="text-red-300 font-medium mb-1">Something went wrong</p>
+          <p id="errorMsg" class="text-red-200 text-sm"></p>
+          <button onclick="resetUI()" class="mt-3 text-xs text-red-300 underline">Try again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual upload fallback (shown on scrape failure) -->
+    <div id="manualSection" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 mb-6">
+      <h3 class="text-amber-300 font-semibold mb-3 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        Scraping failed — Enter details manually
+      </h3>
+      <p class="text-amber-200/70 text-sm mb-4">The listing site may have bot protection. Fill in the details below.</p>
+      <div class="grid grid-cols-2 gap-3 mb-3 text-sm">
+        <div class="col-span-2">
+          <label class="block text-gray-400 mb-1">Property title</label>
+          <input id="m_title" type="text" placeholder="Casa Vista al Mar, Los Cabos" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Price</label>
+          <input id="m_price" type="text" placeholder="$850,000 USD" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Location</label>
+          <input id="m_location" type="text" placeholder="Los Cabos, Mexico" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Beds</label>
+          <input id="m_beds" type="text" placeholder="3" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Baths</label>
+          <input id="m_baths" type="text" placeholder="2" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-gray-400 mb-1">Area (sqft / m²)</label>
+          <input id="m_sqft" type="text" placeholder="1,800 sqft" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-gray-400 mb-1">Description</label>
+          <textarea id="m_desc" rows="4" placeholder="Beautiful ocean-view home…" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-gray-400 mb-1">Image URLs (one per line, up to 8)</label>
+          <textarea id="m_images" rows="4" placeholder="https://cdn.example.com/photo1.jpg&#10;https://cdn.example.com/photo2.jpg" class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"></textarea>
+        </div>
+      </div>
+      <button onclick="submitManual()" class="w-full bg-blue-600 hover:bg-blue-500 transition text-white font-semibold py-2 rounded-xl text-sm">
+        Generate Video with Manual Data
+      </button>
+    </div>
+
+  </div><!-- /max-w-3xl -->
+
+  <script>
+    // ── State ────────────────────────────────────────────────────────────────
+    let currentJobId = null;
+    let pollTimer = null;
+
+    const STEPS = [
+      { id: 1, label: "Scraping" },
+      { id: 2, label: "Script" },
+      { id: 3, label: "Voiceover" },
+      { id: 4, label: "Animating" },
+      { id: 5, label: "Assembly" },
+    ];
+
+    const STATUS_STEP = {
+      scraping: 1,
+      scripting: 2,
+      waiting_for_script: 2,
+      starting_voiceover: 3,
+      voiceover: 3,
+      generating_clips: 4,
+      assembling: 5,
+      completed: 5,
+    };
+
+    // ── Init steps row ───────────────────────────────────────────────────────
+    function initStepsRow() {
+      const row = document.getElementById("stepsRow");
+      row.innerHTML = "";
+      STEPS.forEach((step, i) => {
+        const dot = document.createElement("div");
+        dot.className = "step-dot pending";
+        dot.id = `step-dot-${step.id}`;
+        dot.innerHTML = step.id;
+        dot.title = step.label;
+        row.appendChild(dot);
+        if (i < STEPS.length - 1) {
+          const line = document.createElement("div");
+          line.className = "step-line pending";
+          line.id = `step-line-${step.id}`;
+          row.appendChild(line);
+        }
+      });
+    }
+
+    function updateSteps(activeStep, isDone = false, isError = false) {
+      STEPS.forEach(step => {
+        const dot = document.getElementById(`step-dot-${step.id}`);
+        const line = document.getElementById(`step-line-${step.id}`);
+        if (!dot) return;
+
+        if (step.id < activeStep) {
+          dot.className = "step-dot done";
+          dot.innerHTML = "✓";
+        } else if (step.id === activeStep) {
+          if (isError) {
+            dot.className = "step-dot error";
+            dot.innerHTML = "✗";
+          } else if (isDone) {
+            dot.className = "step-dot done";
+            dot.innerHTML = "✓";
+          } else {
+            dot.className = "step-dot active";
+            dot.innerHTML = `<span class="spinner"></span>`;
+          }
+        } else {
+          dot.className = "step-dot pending";
+          dot.innerHTML = step.id;
+        }
+
+        if (line) {
+          line.className = step.id < activeStep ? "step-line done" : "step-line pending";
+        }
+      });
+    }
+
+    // ── Generate ─────────────────────────────────────────────────────────────
+    async function startGeneration() {
+      const url = document.getElementById("urlInput").value.trim();
+      if (!url) { alert("Please enter a listing URL."); return; }
+
+      resetUI(false);
+      showProgress();
+      initStepsRow();
+
+      const payload = {
+        url,
+        language: document.getElementById("langSelect").value,
+        agent_name: document.getElementById("agentName").value,
+        aspect_ratio: document.getElementById("aspectRatio").value,
+        video_model: document.getElementById("videoModel").value,
+        voice: document.getElementById("voiceSelect").value,
+      };
+
+      try {
+        const res = await fetch("/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        currentJobId = data.job_id;
+        startPolling();
+      } catch (err) {
+        showError(err.message || "Failed to start generation");
+      }
+    }
+
+    // ── Polling ───────────────────────────────────────────────────────────────
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(poll, 2000);
+    }
+
+    async function poll() {
+      if (!currentJobId) return;
+      try {
+        const res = await fetch(`/status/${currentJobId}`);
+        if (!res.ok) return;
+        const job = await res.json();
+        handleJobUpdate(job);
+      } catch (err) {
+        console.warn("Poll error:", err);
+      }
+    }
+
+    function handleJobUpdate(job) {
+      const progress = job.progress ?? 0;
+      const msg = job.message ?? "";
+      const status = job.status ?? "";
+      const step = STATUS_STEP[status] ?? job.step ?? 1;
+
+      // Update progress bar
+      document.getElementById("progressBar").style.width = progress + "%";
+      document.getElementById("progressMsg").textContent = msg;
+
+      // Clip count hint
+      if (status === "generating_clips" && job.clips_total > 0) {
+        document.getElementById("progressMsg").textContent =
+          `Animating images: ${job.clips_done}/${job.clips_total} done`;
+      }
+
+      if (status === "failed") {
+        clearInterval(pollTimer);
+        updateSteps(step, false, true);
+        const errMsg = job.error || "Unknown error";
+        if (errMsg.toLowerCase().includes("scraping") || errMsg.toLowerCase().includes("image")) {
+          showManualForm(errMsg);
+        } else {
+          showError(errMsg);
+        }
+        return;
+      }
+
+      if (status === "waiting_for_script") {
+        clearInterval(pollTimer);
+        updateSteps(2, false, false);
+        document.getElementById("progressBar").style.width = "100%";
+        showScriptEditor(job.script);
+        return;
+      }
+
+      if (status === "completed") {
+        clearInterval(pollTimer);
+        updateSteps(5, true, false);
+        document.getElementById("progressBar").style.width = "100%";
+        showResult(job.job_id, job.aspect_ratio);
+        return;
+      }
+
+      updateSteps(step);
+    }
+
+    // ── Script editor ─────────────────────────────────────────────────────────
+    function showScriptEditor(script) {
+      document.getElementById("scriptEditor").value = script || "";
+      document.getElementById("scriptSection").classList.remove("hidden");
+      document.getElementById("scriptSection").scrollIntoView({ behavior: "smooth" });
+    }
+
+    async function regenerateScript() {
+      if (!currentJobId) return;
+      // Restart from scratch — simplest approach: show a note
+      alert("To regenerate, edit the script text directly or restart with a new URL.");
+    }
+
+    async function continueWithScript() {
+      const script = document.getElementById("scriptEditor").value.trim();
+      if (!script) { alert("Script cannot be empty."); return; }
+      if (!currentJobId) return;
+
+      document.getElementById("scriptSection").classList.add("hidden");
+      showProgress();
+      initStepsRow();
+      updateSteps(3);
+
+      try {
+        const res = await fetch(`/continue/${currentJobId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        startPolling();
+      } catch (err) {
+        showError(err.message || "Failed to continue");
+      }
+    }
+
+    // ── Result ────────────────────────────────────────────────────────────────
+    function showResult(jobId, aspectRatio) {
+      const player = document.getElementById("videoPlayer");
+      player.src = `/download/${jobId}`;
+      if (aspectRatio === "9:16") {
+        player.style.aspectRatio = "9/16";
+        player.style.maxWidth = "360px";
+        player.style.margin = "0 auto";
+      } else {
+        player.style.aspectRatio = "16/9";
+        player.style.maxWidth = "";
+        player.style.margin = "";
+      }
+
+      document.getElementById("downloadBtn").href = `/download/${jobId}`;
+      document.getElementById("downloadBtn").download = `listing_video_${jobId}.mp4`;
+
+      document.getElementById("resultSection").classList.remove("hidden");
+      document.getElementById("progressSection").classList.add("hidden");
+      document.getElementById("resultSection").scrollIntoView({ behavior: "smooth" });
+    }
+
+    // ── Manual form ────────────────────────────────────────────────────────────
+    function showManualForm(errMsg) {
+      document.getElementById("errorMsg").textContent = errMsg;
+      document.getElementById("errorBanner").classList.remove("hidden");
+      document.getElementById("manualSection").classList.remove("hidden");
+      document.getElementById("manualSection").scrollIntoView({ behavior: "smooth" });
+    }
+
+    async function submitManual() {
+      const payload = {
+        url: document.getElementById("urlInput").value.trim() || "manual",
+        language: document.getElementById("langSelect").value,
+        agent_name: document.getElementById("agentName").value,
+        aspect_ratio: document.getElementById("aspectRatio").value,
+        video_model: document.getElementById("videoModel").value,
+        voice: document.getElementById("voiceSelect").value,
+        manual_data: {
+          title: document.getElementById("m_title").value,
+          price: document.getElementById("m_price").value,
+          location: document.getElementById("m_location").value,
+          beds: document.getElementById("m_beds").value,
+          baths: document.getElementById("m_baths").value,
+          sqft: document.getElementById("m_sqft").value,
+          description: document.getElementById("m_desc").value,
+          image_urls: document.getElementById("m_images").value
+            .split("\n").map(s => s.trim()).filter(Boolean).slice(0, 8),
+        }
+      };
+
+      document.getElementById("manualSection").classList.add("hidden");
+      document.getElementById("errorBanner").classList.add("hidden");
+      showProgress();
+      initStepsRow();
+
+      try {
+        const res = await fetch("/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        currentJobId = data.job_id;
+        startPolling();
+      } catch (err) {
+        showError(err.message || "Failed to start generation");
+      }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function showProgress() {
+      document.getElementById("progressSection").classList.remove("hidden");
+      document.getElementById("progressSection").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function showError(msg) {
+      document.getElementById("errorMsg").textContent = msg;
+      document.getElementById("errorBanner").classList.remove("hidden");
+      document.getElementById("progressSection").classList.add("hidden");
+    }
+
+    function resetUI(full = true) {
+      if (pollTimer) clearInterval(pollTimer);
+      document.getElementById("progressSection").classList.add("hidden");
+      document.getElementById("scriptSection").classList.add("hidden");
+      document.getElementById("resultSection").classList.add("hidden");
+      document.getElementById("errorBanner").classList.add("hidden");
+      document.getElementById("manualSection").classList.add("hidden");
+      document.getElementById("progressBar").style.width = "0%";
+      document.getElementById("progressMsg").textContent = "";
+      if (full) {
+        currentJobId = null;
+        document.getElementById("urlInput").value = "";
+      }
+    }
+
+    // ── Enter key on URL input ────────────────────────────────────────────────
+    document.getElementById("urlInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") startGeneration();
+    });
+  </script>
+</body>
+</html>
