@@ -266,6 +266,7 @@ async def run_voiceover_and_video(job_id: str):
             text=job["script"],
             job_dir=job_dir,
             voice=job.get("voice", "Rachel"),
+            language=job.get("language", "en"),
         )
 
         job.update(
